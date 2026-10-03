@@ -1,0 +1,32 @@
+# ==============================================================================
+# Generalized Git Ignore Rules for xkpw-lang Project
+# Excludes all compiled object files, libraries, binaries, and system dumps.
+# ==============================================================================
+
+# Object and intermediate compilation artifacts (recursive)
+*.o
+*.obj
+
+# Static and dynamic shared libraries
+*.a
+*.so
+*.so.*
+*.dylib
+
+# Binary executables and standard output formats
+*.bin
+*.elf
+*.out
+*.exe
+
+# Debug symbols, profiling, and memory crash dumps
+core
+core.*
+*.dSYM/
+*.su
+
+# Compiled compiler root executable
+/compiler
+
+# instructions
+instructions.md

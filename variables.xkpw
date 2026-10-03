@@ -1,0 +1,16 @@
+// variables.xkpw
+
+main() {
+var x;
+var y;
+
+var result;
+
+x = 8;
+y = 2;
+
+result = x + y; 
+
+return result;
+
+}
