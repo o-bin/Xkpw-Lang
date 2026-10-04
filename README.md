@@ -30,17 +30,19 @@ The architectural development of this compiler is governed by absolute constrain
 
 ### 2.1 Lexical Architecture and Alphabet
 
-The alphabet $\Sigma$ of `xkpw-lang` consists of the set of standard 7-bit ASCII characters ranging from code point `0x00` through `0x7F`.
+The alphabet of `xkpw-lang` consists of the set of standard 7-bit ASCII characters ranging from code point `0x00` through `0x7F`.
 
 #### 2.1.1 Whitespace Ingestion
-Whitespace characters are formally defined by the set:
-$$\mathcal{W} = \{ \text{ASCII } \mathtt{0x20} \text{ (Space)}, \mathtt{0x09} \text{ (Horizontal Tab)}, \mathtt{0x0D} \text{ (Carriage Return)}, \mathtt{0x0A} \text{ (Line Feed / Newline)} \}$$
+Whitespace characters are formally defined as:
+* Space (`0x20`)
+* Horizontal Tab (`0x09`)
+* Carriage Return (`0x0D`)
+* Line Feed / Newline (`0x0A`)
+
 Whitespace carries no lexical significance other than acting as a delimiter between alphanumeric tokens. Newline characters (`0x0A`) additionally trigger the monotonically increasing update of the compiler's internal source code line tracker (`cur_tok_line`).
 
 #### 2.1.2 Single-Line Comment Semantics
-Comments begin with the two-character prefix `//` (`0x2F 0x2F`). Formally, the comment scanner recognizes:
-$$\mathcal{C} = \mathtt{//}[\Sigma \setminus \{\mathtt{0x0A}\}]^*(\mathtt{0x0A} \mid \text{EOF})$$
-Upon encountering `//`, the scanner transitions into a discard state, reading and ignoring all subsequent input bytes until a newline character (`0x0A`) or end-of-file condition is encountered. Comments produce no tokens and are completely omitted from the syntactic stream.
+Comments begin with the two-character prefix `//` (`0x2F 0x2F`). Formally, the comment scanner recognizes any sequence beginning with `//` and continues over all non-newline characters until a newline (`0x0A`) or end-of-file condition is encountered. Comments produce no tokens and are completely omitted from the syntactic stream.
 
 #### 2.1.3 Token Categorization and Numerical Encoding
 The compiler defines the following distinct token identifiers:
@@ -302,16 +304,16 @@ This section documents every file, subroutine, symbol, register contract, and da
   * **Input**: `w0` = Character under inspection.
   * **Output**: `x0 = 1` if matched and token initialized; `x0 = 0` if not a recognized punctuator.
   * **Matched Entities**:
-    * `(` $\rightarrow$ `TOK_LPAREN`
-    * `)` $\rightarrow$ `TOK_RPAREN`
-    * `{` $\rightarrow$ `TOK_LBRACE`
-    * `}` $\rightarrow$ `TOK_RBRACE`
-    * `;` $\rightarrow$ `TOK_SEMICOLON`
-    * `=` $\rightarrow$ `TOK_EQUAL`
-    * `+` $\rightarrow$ `TOK_PLUS`
-    * `-` $\rightarrow$ `TOK_MINUS`
-    * `*` $\rightarrow$ `TOK_STAR`
-    * `/` $\rightarrow$ `TOK_SLASH`
+    * `(` -> `TOK_LPAREN`
+    * `)` -> `TOK_RPAREN`
+    * `{` -> `TOK_LBRACE`
+    * `}` -> `TOK_RBRACE`
+    * `;` -> `TOK_SEMICOLON`
+    * `=` -> `TOK_EQUAL`
+    * `+` -> `TOK_PLUS`
+    * `-` -> `TOK_MINUS`
+    * `*` -> `TOK_STAR`
+    * `/` -> `TOK_SLASH`
   * **Algorithm**: Compares `w0` against each ASCII constant. On match, sets corresponding `TOK_*` ID into `cur_tok_type`, loads `lexer_src_ptr`, increments it by 1, writes back, and returns `1`. If no match, returns `0`.
 
 #### File: [`src/lexer/num.s`](file:///root/Xv/src/lexer/num.s)
@@ -410,8 +412,7 @@ This section documents every file, subroutine, symbol, register contract, and da
        * Preserves `x19`, `x20`, `x21`.
        * Calls `symtab_lookup(name, len)`. If `x0 != 0`, returns `0` (duplicate error).
        * Asserts `symtab_count < SYMTAB_MAX_ENTRIES`.
-       * Computes assigned stack offset:
-         $$\text{offset} = - \left( (\text{symtab\_count} + 1) \times 8 \right)$$
+       * Computes assigned stack offset: `offset = -((symtab_count + 1) * 8)`.
        * Calculates entry target address: `entry_ptr = symtab_table + (symtab_count * 32)`.
        * Writes `name_ptr` at `[entry + 0]`, `name_len` at `[entry + 8]`, `offset` at `[entry + 16]`.
        * Increments `symtab_count`.
@@ -420,9 +421,9 @@ This section documents every file, subroutine, symbol, register contract, and da
      * **Signature**: `symtab_get_frame_size() -> uint64_t aligned_size`
      * **Output**: `x0` = Stack size in bytes, rounded up to a multiple of 16.
      * **Algorithm**:
-       $$\text{raw\_size} = \text{symtab\_count} \times 8$$
-       $$\text{aligned\_size} = (\text{raw\_size} + 15) \ \& \ \sim 15$$
-       If `aligned_size == 0`, enforces minimum frame size of 16 bytes. Returns in `x0`.
+       * `raw_size = symtab_count * 8`
+       * `aligned_size = (raw_size + 15) & ~15`
+       * If `aligned_size == 0`, enforces minimum frame size of 16 bytes. Returns in `x0`.
 
 ---
 
@@ -463,13 +464,10 @@ This section documents every file, subroutine, symbol, register contract, and da
   * **Input**: `x0` = 64-bit integer constant.
   * **Algorithm**:
     * If `val <= 0xFFFF`:
-      * Emits `movz x0, #imm16`:
-        $$\text{Opcode} = \mathtt{0xD2800000} \mid ((\text{val} \ \& \ \mathtt{0xFFFF}) \ll 5)$$
+      * Emits `movz x0, #imm16`: `Opcode = 0xD2800000 | ((val & 0xFFFF) << 5)`
     * If `val > 0xFFFF`:
-      * Emits lower chunk `movz x0, #(val & 0xffff)`:
-        $$\text{Opcode}_1 = \mathtt{0xD2800000} \mid ((\text{val} \ \& \ \mathtt{0xFFFF}) \ll 5)$$
-      * Emits upper chunk `movk x0, #((val >> 16) & 0xffff), lsl #16`:
-        $$\text{Opcode}_2 = \mathtt{0xF2A00000} \mid (((\text{val} \gg 16) \ \& \ \mathtt{0xFFFF}) \ll 5)$$
+      * Emits lower chunk `movz x0, #(val & 0xffff)`: `Opcode_1 = 0xD2800000 | ((val & 0xFFFF) << 5)`
+      * Emits upper chunk `movk x0, #((val >> 16) & 0xffff), lsl #16`: `Opcode_2 = 0xF2A00000 | (((val >> 16) & 0xFFFF) << 5)`
 
 #### File: [`src/codegen/emit_mem.s`](file:///root/Xv/src/codegen/emit_mem.s)
 * **Juridical Role**: Synthesis of memory access instructions for local stack variables.
@@ -478,14 +476,12 @@ This section documents every file, subroutine, symbol, register contract, and da
      * **Signature**: `emit_load_var(int64_t offset) -> void`
      * **Input**: `x0` = Signed byte offset relative to `x29`.
      * **Instruction**: `ldur x0, [x29, #simm9]`
-     * **Formula**:
-       $$\text{Opcode} = \mathtt{0xF84003A0} \mid ((x_0 \ \& \ \mathtt{0x1FF}) \ll 12)$$
+     * **Formula**: `Opcode = 0xF84003A0 | ((x0 & 0x1FF) << 12)`
   2. `emit_store_var`:
      * **Signature**: `emit_store_var(int64_t offset) -> void`
      * **Input**: `x0` = Signed byte offset relative to `x29`.
      * **Instruction**: `stur x0, [x29, #simm9]`
-     * **Formula**:
-       $$\text{Opcode} = \mathtt{0xF80003A0} \mid ((x_0 \ \& \ \mathtt{0x1FF}) \ll 12)$$
+     * **Formula**: `Opcode = 0xF80003A0 | ((x0 & 0x1FF) << 12)`
 
 #### File: [`src/codegen/emit_stack.s`](file:///root/Xv/src/codegen/emit_stack.s)
 * **Juridical Role**: Synthesis of operand preservation instructions on the processor stack.
@@ -497,9 +493,9 @@ This section documents every file, subroutine, symbol, register contract, and da
 * **Juridical Role**: Synthesis of binary integer arithmetic instructions operating over registers `x1` (left operand) and `x0` (right operand), placing the result in `x0`.
 * **Subroutines**:
   1. `emit_add`: Emits `add x0, x1, x0` (`0x8b000020`).
-  2. `emit_sub`: Emits `sub x0, x1, x0` (`0xcb000020`). Computes $x_0 = x_1 - x_0$.
-  3. `emit_mul`: Emits `mul x0, x1, x0` (`0x9b007c20`). Computes $x_0 = x_1 \times x_0$.
-  4. `emit_div`: Emits `sdiv x0, x1, x0` (`0x9ac00c20`). Computes $x_0 = \lfloor x_1 / x_0 \rfloor$ (signed division).
+  2. `emit_sub`: Emits `sub x0, x1, x0` (`0xcb000020`). Computes `x0 = x1 - x0`.
+  3. `emit_mul`: Emits `mul x0, x1, x0` (`0x9b007c20`). Computes `x0 = x1 * x0`.
+  4. `emit_div`: Emits `sdiv x0, x1, x0` (`0x9ac00c20`). Computes `x0 = x1 / x0` (signed division).
 
 #### File: [`src/codegen/emit_exit.s`](file:///root/Xv/src/codegen/emit_exit.s)
 * **Juridical Role**: Synthesis of operating system termination supervisor calls.
@@ -652,11 +648,11 @@ This section documents every file, subroutine, symbol, register contract, and da
      * Returns.
   2. `parse_statement`:
      * Dispatches according to `cur_tok_type`:
-       * `TOK_KW_VAR` $\rightarrow$ `parse_var_decl`
-       * `TOK_IDENT` $\rightarrow$ `parse_assignment`
-       * `TOK_KW_RETURN` $\rightarrow$ `parse_return_stmt`
-       * `TOK_SEMICOLON` $\rightarrow$ `lexer_next` (empty statement)
-       * Otherwise $\rightarrow$ `error_invalid_stmt`.
+       * `TOK_KW_VAR` -> `parse_var_decl`
+       * `TOK_IDENT` -> `parse_assignment`
+       * `TOK_KW_RETURN` -> `parse_return_stmt`
+       * `TOK_SEMICOLON` -> `lexer_next` (empty statement)
+       * Otherwise -> `error_invalid_stmt`.
 
 ---
 
@@ -860,4 +856,4 @@ echo $?
 10
 ```
 
-The returned integer status code is certified to be mathematically equal to $8 + 2 = 10$, confirming total compliance with all language, architectural, and legal specifications.
+The returned integer status code is certified to be mathematically equal to 8 + 2 = 10, confirming total compliance with all language, architectural, and legal specifications.
